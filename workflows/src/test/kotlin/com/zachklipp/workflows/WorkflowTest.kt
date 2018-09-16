@@ -31,6 +31,32 @@ class WorkflowTest {
     assertEquals(actual = workflow.result.await(), expected = "done")
   }
 
+  @Test fun states() = runBlocking {
+    val workflow = MyReactor().toWorkflow(this, EnterState("initial"))
+    val state = workflow.state.receive()
+    assertEquals(actual = state.state, expected = "initial")
+
+    state.sendEvent("on(next)")
+
+    assertEquals(actual = workflow.state.receive().state, expected = "next")
+
+    workflow.abandon()
+  }
+
+  @Test fun finishes() = runBlocking {
+    val workflow = MyReactor().toWorkflow(this, EnterState("initial"))
+
+    workflow.state.receive()
+        .let {
+          assertEquals(actual = it.state, expected = "initial")
+          it.sendEvent("finish(alldone)")
+        }
+    assertTrue(workflow.state.none())
+    assertTrue(workflow.state.isClosedForReceive)
+    assertTrue(workflow.result.isCompleted)
+    assertEquals(actual = workflow.result.await(), expected = "alldone")
+  }
+
   @Test fun abandonClosesChannels() = runBlocking {
     val workflow = MyReactor().toWorkflow(this, EnterState("initial"))
 
@@ -53,38 +79,103 @@ class WorkflowTest {
     }
   }
 
-  @Test fun states() = runBlocking {
+  @Test fun cancelResultNormallyClosesChannels() = runBlocking {
     val workflow = MyReactor().toWorkflow(this, EnterState("initial"))
 
-    val state = workflow.state.receive()
-    assertEquals(actual = state.state, expected = "initial")
+    workflow.result.cancel(CancellationException("nvm"))
 
-    assertTrue(state.eventHandler("on(next)"))
-
-    assertEquals(actual = workflow.state.receive().state, expected = "next")
-
-    workflow.abandon()
+    val (state, result) = workflow.outputs
+    assertTrue(result.isCancelled)
+    assertTrue(result.isCompletedExceptionally)
+    assertTrue(state.isClosedForReceive)
+    try {
+      result.await()
+      fail("expected a CancellationException")
+    } catch (e: CancellationException) {
+      assertEquals("nvm", e.message)
+    }
+    try {
+      assertNull(state.receiveOrNull())
+      fail("expected a CancellationException")
+    } catch (e: CancellationException) {
+      assertEquals("nvm", e.message)
+    }
   }
 
-  @Test fun finishes() = runBlocking {
+  @Test fun cancelResultExceptionallyClosesChannels() = runBlocking {
     val workflow = MyReactor().toWorkflow(this, EnterState("initial"))
 
-    workflow.state.receive()
-        .let {
-          assertEquals(actual = it.state, expected = "initial")
-          assertTrue(it.eventHandler("finish(alldone)"))
-        }
-    assertTrue(workflow.state.none())
-    assertTrue(workflow.state.isClosedForReceive)
-    assertTrue(workflow.result.isCompleted)
-    assertEquals(actual = workflow.result.await(), expected = "alldone")
+    workflow.result.cancel(RuntimeException("nvm"))
+
+    val (state, result) = workflow.outputs
+    assertTrue(result.isCancelled)
+    assertTrue(result.isCompletedExceptionally)
+    assertTrue(state.isClosedForReceive)
+    try {
+      result.await()
+      fail("expected a RuntimeException")
+    } catch (e: RuntimeException) {
+      assertEquals("nvm", e.message)
+    }
+    try {
+      assertNull(state.receiveOrNull())
+      fail("expected a RuntimeException")
+    } catch (e: RuntimeException) {
+      assertEquals("nvm", e.message)
+    }
+  }
+
+  @Test fun cancelStateNormallyClosesChannels() = runBlocking {
+    val workflow = MyReactor().toWorkflow(this, EnterState("initial"))
+
+    workflow.state.cancel(CancellationException("nvm"))
+
+    val (state, result) = workflow.outputs
+    assertTrue(result.isCancelled)
+    assertTrue(result.isCompletedExceptionally)
+    assertTrue(state.isClosedForReceive)
+    try {
+      result.await()
+      fail("expected a CancellationException")
+    } catch (e: CancellationException) {
+      assertEquals("nvm", e.message)
+    }
+    try {
+      assertNull(state.receiveOrNull())
+      fail("expected a CancellationException")
+    } catch (e: CancellationException) {
+      assertEquals("nvm", e.message)
+    }
+  }
+
+  @Test fun cancelStateExceptionallyClosesChannels() = runBlocking {
+    val workflow = MyReactor().toWorkflow(this, EnterState("initial"))
+
+    workflow.state.cancel(RuntimeException("nvm"))
+
+    val (state, result) = workflow.outputs
+    assertFalse(result.isCancelled)
+    assertTrue(result.isCompletedExceptionally)
+    assertTrue(state.isClosedForReceive)
+    try {
+      result.await()
+      fail("expected a RuntimeException")
+    } catch (e: RuntimeException) {
+      assertEquals("nvm", e.message)
+    }
+    try {
+      assertNull(state.receiveOrNull())
+      fail("expected a RuntimeException")
+    } catch (e: RuntimeException) {
+      assertEquals("nvm", e.message)
+    }
   }
 
   @Test fun whenReactorThrows() = runBlocking {
     val workflow = MyReactor().toWorkflow(this, EnterState("initial"))
 
     workflow.state.receive()
-        .eventHandler("throw(fail)")
+        .sendEvent("throw(fail)")
 
     try {
       workflow.state.receive()
