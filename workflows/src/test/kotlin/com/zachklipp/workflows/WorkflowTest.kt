@@ -27,9 +27,30 @@ class WorkflowTest {
     val workflow = MyReactor().toWorkflow(this, FinishWith("done"))
 
     assertTrue(workflow.state.none())
+    assertTrue(workflow.state.isClosedForReceive)
     assertEquals(actual = workflow.result.await(), expected = "done")
+  }
+
+  @Test fun abandonClosesChannels() = runBlocking {
+    val workflow = MyReactor().toWorkflow(this, EnterState("initial"))
 
     workflow.abandon()
+
+    val (state, result) = workflow.outputs
+    assertTrue(result.isCancelled)
+    assertTrue(state.isClosedForReceive)
+    try {
+      result.await()
+      fail("expected a CancellationException")
+    } catch (e: CancellationException) {
+      // success!
+    }
+    try {
+      assertNull(state.receiveOrNull())
+      fail("expected a CancellationException")
+    } catch (e: CancellationException) {
+      // success!
+    }
   }
 
   @Test fun states() = runBlocking {
@@ -39,30 +60,44 @@ class WorkflowTest {
     assertEquals(actual = state.state, expected = "initial")
 
     assertTrue(state.eventHandler("on(next)"))
+
     assertEquals(actual = workflow.state.receive().state, expected = "next")
 
     workflow.abandon()
   }
 
-  @Test fun abandonClosesChannels() = runBlocking {
+  @Test fun finishes() = runBlocking {
     val workflow = MyReactor().toWorkflow(this, EnterState("initial"))
 
-    workflow.abandon()
-
-    assertTrue(workflow.result.isCancelled)
+    workflow.state.receive()
+        .let {
+          assertEquals(actual = it.state, expected = "initial")
+          assertTrue(it.eventHandler("finish(alldone)"))
+        }
+    assertTrue(workflow.state.none())
     assertTrue(workflow.state.isClosedForReceive)
+    assertTrue(workflow.result.isCompleted)
+    assertEquals(actual = workflow.result.await(), expected = "alldone")
+  }
+
+  @Test fun whenReactorThrows() = runBlocking {
+    val workflow = MyReactor().toWorkflow(this, EnterState("initial"))
+
+    workflow.state.receive()
+        .eventHandler("throw(fail)")
+
+    try {
+      workflow.state.receive()
+    } catch (e: RuntimeException) {
+      assertEquals(actual = e.message, expected = "fail")
+    }
     try {
       workflow.result.await()
-      fail("expected a CancellationException")
-    } catch (e: CancellationException) {
-      // success!
+    } catch (e: RuntimeException) {
+      assertEquals(actual = e.message, expected = "fail")
     }
-    try {
-      assertNull(workflow.state.receiveOrNull())
-      fail("expected a CancellationException")
-    } catch (e: CancellationException) {
-      // success!
-    }
+
+    workflow.abandon()
   }
 }
 
@@ -78,15 +113,17 @@ private class MyReactor : Reactor<String, String, String> {
 
   companion object {
     private val COMMAND_PATTERN = """^(\w+)\((\w+)\)$""".toRegex()
-    private const val CONTINUE_COMMAND = "on"
-    private const val FINISH_COMMAND = "finish"
+    private const val CONTINUE_VERB = "on"
+    private const val THROW_VERB = "throw"
+    private const val FINISH_VERB = "finish"
 
     private fun parseReaction(command: String): Reaction<String, String> {
-      val (command, value) = COMMAND_PATTERN.matchEntire(command)?.destructured
+      val (verb, value) = COMMAND_PATTERN.matchEntire(command)?.destructured
           ?: throw IllegalArgumentException("Expected command to match $COMMAND_PATTERN: $command")
-      return when (command) {
-        CONTINUE_COMMAND -> EnterState(value)
-        FINISH_COMMAND -> FinishWith(value)
+      return when (verb) {
+        CONTINUE_VERB -> EnterState(value)
+        THROW_VERB -> throw RuntimeException(value)
+        FINISH_VERB -> FinishWith(value)
         else -> throw IllegalArgumentException("Unrecognized command: $command")
       }
     }

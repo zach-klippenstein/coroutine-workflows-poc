@@ -3,8 +3,11 @@ package com.zachklipp.workflows
 import com.zachklipp.workflows.Reaction.EnterState
 import com.zachklipp.workflows.Reaction.FinishWith
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
@@ -14,6 +17,7 @@ import kotlinx.coroutines.channels.broadcast
 import kotlinx.coroutines.channels.firstOrNull
 import kotlinx.coroutines.channels.map
 import kotlinx.coroutines.channels.mapNotNull
+import kotlinx.coroutines.launch
 
 typealias EventHandler<E> = (E) -> Boolean
 
@@ -28,6 +32,9 @@ interface Workflow<out State : Any, in Event : Any, out Result : Any> {
 
   fun abandon()
 }
+
+val <S : Any, E : Any, R : Any> Workflow<S, E, R>.outputs
+  get() = Pair(state, result)
 
 @Suppress("unused")
 sealed class Reaction<out State : Any, out Result : Any> {
@@ -48,36 +55,44 @@ fun <S : Any, E : Any, R : Any> Reactor<S, E, R>.toWorkflow(
 ): Workflow<S, E, R> {
   val reactor = this
   val eventChannel = Channel<E>()
-  val workflowJob = Job(parent = coroutineScope.coroutineContext[Job])
-  // CoroutineScope.plus is broken.
-  with(CoroutineScope(coroutineScope.coroutineContext + workflowJob)) {
-    val bcast = broadcast<Reaction<S, R>> {
-      coroutineContext[Job]!!.invokeOnCompletion { println("bcast completed: $it") }
+  lateinit var workflowJob: Job
+  lateinit var state: ReceiveChannel<WorkflowState<S, E>>
+  lateinit var result: Deferred<R?>
+
+  // This coroutine gives us a job that contains all the worker coroutines as children,
+  // so we can cancel everything at once.
+  workflowJob = coroutineScope.launch(
+      CoroutineName("workflow scope") +
+          Dispatchers.Unconfined
+  ) {
+    val bcast = broadcast<Reaction<S, R>>(
+//        start = CoroutineStart.LAZY,
+        context = CoroutineName("reactor loop"),
+        onCompletion = { println("finisehd with $it") }
+    ) {
       reactLoop(reactor, initialState, channel, eventChannel)
     }
 
-    // Open the subscription immediately so it'll see the finish reaction even if it's the initial
-    // reaction. If this were in the async block for result, we'd need to pass start = UNDISPATCHED
-    val finishReaction = bcast.openSubscription()
-        .mapNotNull { it as? FinishWith<R> }
+    state = bcast.openSubscription()
+        .mapNotNull { (it as? EnterState)?.state }
+        .map { state -> WorkflowState(state, eventChannel::offer) }
 
-    return object : Workflow<S, E, R> {
-      override val state: ReceiveChannel<WorkflowState<S, E>> = bcast.openSubscription()
-          .mapNotNull { (it as? EnterState)?.state }
-          .map { state -> WorkflowState(state, eventChannel::offer) }
+    result = async(CoroutineName("reactor result")) {
+      val channel = bcast.openSubscription()
+      val r = channel
+          .mapNotNull { it as? FinishWith<R> }
+          .firstOrNull()
+          ?.result
+      return@async r
+    }
+  }
 
-      override val result: Deferred<R?> = async {
-        coroutineContext[Job]!!.invokeOnCompletion { println("async completed: $it") }
-        finishReaction.firstOrNull()
-            ?.result
-      }
+  return object : Workflow<S, E, R> {
+    override val state: ReceiveChannel<WorkflowState<S, E>> = state
+    override val result: Deferred<R?> = result
 
-      override fun abandon() {
-//        workflowJob.cancel()
-        workflowJob.cancel(CancellationException("Workflow abandoned."))
-//        bcast.cancel()
-//        result.cancel()
-      }
+    override fun abandon() {
+      workflowJob.cancel(CancellationException("Workflow abandoned."))
     }
   }
 }
@@ -89,10 +104,10 @@ private suspend fun <S : Any, E : Any, R : Any> reactLoop(
   eventChannel: ReceiveChannel<E>
 ) {
   var currentReaction = initialState
-  do {
+  outputChannel.send(currentReaction)
+
+  while (currentReaction is EnterState) {
+    currentReaction = reactor.onReact(currentReaction.state, eventChannel)
     outputChannel.send(currentReaction)
-    (currentReaction as? EnterState)?.let { nextState ->
-      currentReaction = reactor.onReact(nextState.state, eventChannel)
-    }
-  } while (currentReaction !is FinishWith)
+  }
 }
