@@ -3,7 +3,6 @@ package com.zachklipp.workflows.app
 import com.zachklipp.workflows.Finish
 import com.zachklipp.workflows.Reaction
 import com.zachklipp.workflows.Reaction.EnterState
-import com.zachklipp.workflows.Reactor
 import com.zachklipp.workflows.Workflow
 import com.zachklipp.workflows.app.HelloEvent.OnExit
 import com.zachklipp.workflows.app.HelloEvent.OnFinishedEnteringName
@@ -13,7 +12,7 @@ import com.zachklipp.workflows.app.HelloEvent.OnRestart
 import com.zachklipp.workflows.app.HelloScreen.EnteringName
 import com.zachklipp.workflows.app.HelloScreen.Landing
 import com.zachklipp.workflows.app.HelloScreen.ShowingGreeting
-import com.zachklipp.workflows.toWorkflow
+import com.zachklipp.workflows.generateWorkflow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.ReceiveChannel
 
@@ -34,8 +33,7 @@ sealed class HelloEvent {
 typealias HelloWorkflow = Workflow<HelloScreen, HelloEvent, Unit>
 
 class HelloStarter(private val coroutineScope: CoroutineScope) {
-  fun start(): HelloWorkflow = Reactor(::helloReact)
-      .toWorkflow(coroutineScope, EnterState(Landing))
+  fun start(): HelloWorkflow = coroutineScope.generateWorkflow(Landing, ::helloReact)
 }
 
 internal suspend fun helloReact(
