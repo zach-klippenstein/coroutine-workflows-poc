@@ -86,32 +86,32 @@ inline fun <S : Any, E : Any, R : Any> CoroutineScope.generateWorkflow(
     state: S,
     events: ReceiveChannel<E>
   ): Reaction<S, R> = react(state, events)
-}.toWorkflow(this, initialReaction)
+}.asWorkflow(this, initialReaction)
 
 /**
  * Creates a workflow from a [Reactor] using the current scope.
  */
-suspend inline fun <S : Any, E : Any, R : Any> Reactor<S, E, R>.toWorkflow(
+suspend inline fun <S : Any, E : Any, R : Any> Reactor<S, E, R>.asWorkflow(
   initialState: S,
   coroutineContext: CoroutineContext = EmptyCoroutineContext
-): Workflow<S, E, R> = toWorkflow(EnterState(initialState), coroutineContext)
+): Workflow<S, E, R> = asWorkflow(EnterState(initialState), coroutineContext)
 
 /**
  * Creates a workflow from a [Reactor] using the current scope.
  */
-suspend inline fun <S : Any, E : Any, R : Any> Reactor<S, E, R>.toWorkflow(
+suspend inline fun <S : Any, E : Any, R : Any> Reactor<S, E, R>.asWorkflow(
   initialReaction: Reaction<S, R>,
   coroutineContext: CoroutineContext = EmptyCoroutineContext
-): Workflow<S, E, R> = currentScope { toWorkflow(this + coroutineContext, initialReaction) }
+): Workflow<S, E, R> = currentScope { asWorkflow(this + coroutineContext, initialReaction) }
 
 /**
- * Convenience for calling [toWorkflow] with [EnterState].
+ * Convenience for calling [asWorkflow] with [EnterState].
  */
 @Suppress("NOTHING_TO_INLINE")
-inline fun <S : Any, E : Any, R : Any> Reactor<S, E, R>.toWorkflow(
+inline fun <S : Any, E : Any, R : Any> Reactor<S, E, R>.asWorkflow(
   coroutineScope: CoroutineScope,
   initialState: S
-) = toWorkflow(coroutineScope, EnterState(initialState))
+) = asWorkflow(coroutineScope, EnterState(initialState))
 
 /**
  * Creates a [Workflow] from this [Reactor].
@@ -123,7 +123,7 @@ inline fun <S : Any, E : Any, R : Any> Reactor<S, E, R>.toWorkflow(
  * @param initialReaction The initial state to pass to [Reactor.onReact] or the result if the
  * workflow should be started as finished.
  */
-fun <S : Any, E : Any, R : Any> Reactor<S, E, R>.toWorkflow(
+fun <S : Any, E : Any, R : Any> Reactor<S, E, R>.asWorkflow(
   coroutineScope: CoroutineScope,
   initialReaction: Reaction<S, R>
 ): Workflow<S, E, R> = coroutineScope.workflow(Dispatchers.Unconfined) {
