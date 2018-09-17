@@ -18,6 +18,6 @@ pluginManagement {
     }
   }
 }
-rootProject.name = 'javafx-test'
+rootProject.name = 'coroutine-workflows-poc'
 include 'app'
 include 'workflows'

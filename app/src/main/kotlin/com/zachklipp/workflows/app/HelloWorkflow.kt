@@ -1,31 +1,26 @@
 package com.zachklipp.workflows.app
 
+import com.zachklipp.workflows.Finish
 import com.zachklipp.workflows.Reaction
 import com.zachklipp.workflows.Reaction.EnterState
 import com.zachklipp.workflows.Reactor
 import com.zachklipp.workflows.Workflow
-import com.zachklipp.workflows.app.HelloState.EnteringName
-import com.zachklipp.workflows.app.HelloState.Landing
-import com.zachklipp.workflows.app.HelloState.ShowingGreeting
-import com.zachklipp.workflows.mapState
+import com.zachklipp.workflows.app.HelloEvent.OnExit
+import com.zachklipp.workflows.app.HelloEvent.OnFinishedEnteringName
+import com.zachklipp.workflows.app.HelloEvent.OnGoToGreeting
+import com.zachklipp.workflows.app.HelloEvent.OnNameChanged
+import com.zachklipp.workflows.app.HelloEvent.OnRestart
+import com.zachklipp.workflows.app.HelloScreen.EnteringName
+import com.zachklipp.workflows.app.HelloScreen.Landing
+import com.zachklipp.workflows.app.HelloScreen.ShowingGreeting
 import com.zachklipp.workflows.toWorkflow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.ReceiveChannel
-import kotlinx.coroutines.selects.select
 
-sealed class HelloState {
-  object Landing : HelloState()
-  data class EnteringName(val name: String = "") : HelloState()
-  data class ShowingGreeting(val name: String) : HelloState()
-}
-
-data class HelloScreen(
-  val key: String,
-  val data: HelloScreenData
-)
-
-sealed class HelloScreenData {
-
+sealed class HelloScreen(val title: String) {
+  object Landing : HelloScreen("Welcome!")
+  data class EnteringName(val name: String = "") : HelloScreen("Welcome, $name!")
+  data class ShowingGreeting(val name: String) : HelloScreen("Welcome, $name!")
 }
 
 sealed class HelloEvent {
@@ -41,28 +36,30 @@ typealias HelloWorkflow = Workflow<HelloScreen, HelloEvent, Unit>
 class HelloStarter(private val coroutineScope: CoroutineScope) {
   fun start(): HelloWorkflow = Reactor(::helloReact)
       .toWorkflow(coroutineScope, EnterState(Landing))
-      .mapState { TODO() }
 }
 
 internal suspend fun helloReact(
-  state: HelloState,
+  screen: HelloScreen,
   events: ReceiveChannel<HelloEvent>
-): Reaction<HelloState, Unit> {
-//  when (
-//    val event = events.receive()
-//    ) {
-//    OnRestart -> return EnterState(Landing)
-//    OnExit -> return Finish
-//
-//  }
+): Reaction<HelloScreen, Unit> {
+  val event = events.receive()
 
-  select<Any> {
-    events.onReceive
+  // Handle the common events.
+  when (event) {
+    OnRestart -> return EnterState(Landing)
+    OnExit -> return Finish
   }
 
-  return when (state) {
-    Landing -> TODO()
-    is EnteringName -> TODO()
-    is ShowingGreeting -> TODO()
-  }
+  return when (screen) {
+    Landing -> when (event) {
+      OnGoToGreeting -> EnterState(EnteringName())
+      else -> null
+    }
+    is EnteringName -> when (event) {
+      is OnNameChanged -> EnterState(screen.copy(name = event.name))
+      OnFinishedEnteringName -> EnterState(ShowingGreeting(screen.name))
+      else -> null
+    }
+    is ShowingGreeting -> null // no other events accepted on this screen
+  } ?: throw IllegalStateException("invalid event in $screen: $event")
 }

@@ -91,7 +91,7 @@ fun <S : Any, E : Any, R : Any> Reactor<S, E, R>.toWorkflow(
     override val state: ReceiveChannel<WorkflowState<S, E>> = stateChannel
 
     // This coroutine contains the main reactor loop.
-    override val result: Deferred<R?> = coroutineScope.async(
+    override val result: Deferred<R> = coroutineScope.async(
         context = CoroutineName("workflow reactor loop") +
             Dispatchers.Unconfined,
         // Cancelling the result also cancels the channel (and vice versa).

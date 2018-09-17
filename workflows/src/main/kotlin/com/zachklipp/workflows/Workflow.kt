@@ -43,7 +43,7 @@ data class WorkflowState<out State : Any, in Event : Any>(
  */
 interface Workflow<out State : Any, in Event : Any, out Result : Any> {
   val state: ReceiveChannel<WorkflowState<State, Event>>
-  val result: Deferred<Result?>
+  val result: Deferred<Result>
 
   // TODO does this method even need to exist? i suspect all the use cases for it will end up
   // implicitly cancelling the result/state channel anyway
@@ -64,7 +64,7 @@ inline fun <S1 : Any, S2 : Any, E : Any, R : Any> Workflow<S1, E, R>.mapState(
     this@mapState.state.map { (state, eventHandler) ->
       WorkflowState(transform(state), eventHandler)
     }
-  override val result: Deferred<R?> get() = this@mapState.result
+  override val result: Deferred<R> get() = this@mapState.result
 
   override fun abandon() = this@mapState.abandon()
 }
@@ -76,7 +76,7 @@ inline fun <S1 : Any, S2 : Any, E : Any, R : Any> Workflow<S1, E, R>.flatMapStat
     this@flatMapState.state.flatMap { (state, eventHandler) ->
       transform(state).map { WorkflowState(it, eventHandler) }
     }
-  override val result: Deferred<R?> get() = this@flatMapState.result
+  override val result: Deferred<R> get() = this@flatMapState.result
 
   override fun abandon() = this@flatMapState.abandon()
 }
@@ -88,7 +88,7 @@ inline fun <S : Any, E1 : Any, E2 : Any, R : Any> Workflow<S, E1, R>.mapEvent(
     this@mapEvent.state.map { (state, eventHandler) ->
       WorkflowState<S, E2>(state) { eventHandler(transform(it)) }
     }
-  override val result: Deferred<R?> get() = this@mapEvent.result
+  override val result: Deferred<R> get() = this@mapEvent.result
 
   override fun abandon() = this@mapEvent.abandon()
 }
@@ -97,9 +97,9 @@ inline fun <S : Any, E : Any, R1 : Any, R2 : Any> Workflow<S, E, R1>.mapResult(
   crossinline transform: (R1) -> R2
 ): Workflow<S, E, R2> = object : Workflow<S, E, R2> {
   override val state: ReceiveChannel<WorkflowState<S, E>> get() = this@mapResult.state
-  override val result: Deferred<R2?> = GlobalScope.async(Dispatchers.Unconfined) {
+  override val result: Deferred<R2> = GlobalScope.async(Dispatchers.Unconfined) {
     this@mapResult.result.await()
-        ?.let(transform)
+        .let(transform)
   }
 
   override fun abandon() = this@mapResult.abandon()
