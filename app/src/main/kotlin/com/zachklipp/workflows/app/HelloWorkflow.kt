@@ -1,7 +1,6 @@
 package com.zachklipp.workflows.app
 
-import com.zachklipp.workflows.Finish
-import com.zachklipp.workflows.Reaction
+import com.zachklipp.workflows.Reaction.Companion.Finish
 import com.zachklipp.workflows.Reaction.EnterState
 import com.zachklipp.workflows.Workflow
 import com.zachklipp.workflows.app.HelloEvent.OnExit
@@ -12,9 +11,8 @@ import com.zachklipp.workflows.app.HelloEvent.OnRestart
 import com.zachklipp.workflows.app.HelloScreen.EnteringName
 import com.zachklipp.workflows.app.HelloScreen.Landing
 import com.zachklipp.workflows.app.HelloScreen.ShowingGreeting
-import com.zachklipp.workflows.generateWorkflow
+import com.zachklipp.workflows.reactor
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.channels.ReceiveChannel
 
 sealed class HelloScreen(val title: String) {
   object Landing : HelloScreen("Welcome!")
@@ -32,32 +30,27 @@ sealed class HelloEvent {
 
 typealias HelloWorkflow = Workflow<HelloScreen, HelloEvent, Unit>
 
-class HelloStarter(private val coroutineScope: CoroutineScope) {
-  fun start(): HelloWorkflow = coroutineScope.generateWorkflow(Landing, ::helloReact)
-}
+class HelloStarter(scope: CoroutineScope) : CoroutineScope by scope {
+  fun start(): HelloWorkflow = reactor<HelloScreen, HelloEvent, Unit>(Landing) { screen, events ->
+    val event = events.receive()
 
-internal suspend fun helloReact(
-  screen: HelloScreen,
-  events: ReceiveChannel<HelloEvent>
-): Reaction<HelloScreen, Unit> {
-  val event = events.receive()
+    // Handle the common events.
+    when (event) {
+      OnRestart -> return@reactor EnterState(Landing)
+      OnExit -> return@reactor Finish
+    }
 
-  // Handle the common events.
-  when (event) {
-    OnRestart -> return EnterState(Landing)
-    OnExit -> return Finish
+    when (screen) {
+      Landing -> when (event) {
+        OnGoToGreeting -> EnterState(EnteringName())
+        else -> null
+      }
+      is EnteringName -> when (event) {
+        is OnNameChanged -> EnterState(screen.copy(name = event.name))
+        OnFinishedEnteringName -> EnterState(ShowingGreeting(screen.name))
+        else -> null
+      }
+      is ShowingGreeting -> null // no other events accepted on this screen
+    } ?: throw IllegalStateException("invalid event in $screen: $event")
   }
-
-  return when (screen) {
-    Landing -> when (event) {
-      OnGoToGreeting -> EnterState(EnteringName())
-      else -> null
-    }
-    is EnteringName -> when (event) {
-      is OnNameChanged -> EnterState(screen.copy(name = event.name))
-      OnFinishedEnteringName -> EnterState(ShowingGreeting(screen.name))
-      else -> null
-    }
-    is ShowingGreeting -> null // no other events accepted on this screen
-  } ?: throw IllegalStateException("invalid event in $screen: $event")
 }

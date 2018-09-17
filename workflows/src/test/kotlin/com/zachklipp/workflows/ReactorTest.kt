@@ -13,7 +13,7 @@ import kotlin.test.fail
 
 class ReactorTest {
   @Test fun initialState() = runBlocking {
-    val workflow = generateWorkflow("initial", ::testReactor)
+    val workflow = reactor("initial", reactor = ::testReactor)
 
     assertEquals(actual = workflow.state.receive().state, expected = "initial")
     assertFalse(workflow.result.isCompleted)
@@ -22,7 +22,7 @@ class ReactorTest {
   }
 
   @Test fun initiallyFinished() = runBlocking {
-    val workflow = generateWorkflow(FinishWith("done"), ::testReactor)
+    val workflow = reactor(FinishWith("done"), reactor = ::testReactor)
 
     assertTrue(workflow.state.none())
     assertTrue(workflow.state.isClosedForReceive)
@@ -30,7 +30,7 @@ class ReactorTest {
   }
 
   @Test fun states() = runBlocking {
-    val workflow = generateWorkflow("initial", ::testReactor)
+    val workflow = reactor("initial", reactor = ::testReactor)
     val state = workflow.state.receive()
     assertEquals(actual = state.state, expected = "initial")
 
@@ -42,7 +42,7 @@ class ReactorTest {
   }
 
   @Test fun finishes() = runBlocking {
-    val workflow = generateWorkflow("initial", ::testReactor)
+    val workflow = reactor("initial", reactor = ::testReactor)
 
     workflow.state.receive()
         .let {
@@ -56,7 +56,7 @@ class ReactorTest {
   }
 
   @Test fun whenReactorThrows() = runBlocking {
-    val workflow = generateWorkflow("initial", ::testReactor)
+    val workflow = reactor("initial", reactor = ::testReactor)
 
     workflow.state.receive()
         .sendEvent("throw(fail)")
