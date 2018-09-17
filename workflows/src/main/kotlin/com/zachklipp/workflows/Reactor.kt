@@ -4,7 +4,6 @@ import com.zachklipp.workflows.Reaction.EnterState
 import com.zachklipp.workflows.Reaction.FinishWith
 import com.zachklipp.workflows.Reactor.Companion.invoke
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers

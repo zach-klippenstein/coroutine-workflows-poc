@@ -5,7 +5,6 @@ import com.zachklipp.workflows.Reaction.FinishWith
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.none
-import kotlinx.coroutines.runBlocking
 import kotlin.coroutines.coroutineContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -168,7 +167,7 @@ private class MyReactor : Reactor<String, String, String> {
     state: String,
     events: ReceiveChannel<String>
   ): Reaction<String, String> {
-    println("waiting for command… [${Thread.currentThread().name}:$coroutineContext]")
+    println("waiting for command… [$coroutineContext]")
     val event = events.receive()
     println("In state '$state', got event '$event'…")
     return parseReaction(event).also { println("next state: $it") }
