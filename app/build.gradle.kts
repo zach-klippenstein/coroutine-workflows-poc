@@ -16,13 +16,14 @@ repositories {
 }
 
 dependencies {
+  compile(project(":workflows"))
   compile(kotlin("stdlib-jdk8"))
   compile("org.jetbrains.kotlinx:kotlinx-coroutines-core:0.26.0-eap13")
   compile("org.jetbrains.kotlinx:kotlinx-coroutines-javafx:0.26.0-eap13")
   testCompile("junit", "junit", "4.12")
 }
 
-configure<ApplicationPluginConvention>{
+configure<ApplicationPluginConvention> {
   mainClassName = "com.zachklipp.workflows.app.MainKt"
 }
 
