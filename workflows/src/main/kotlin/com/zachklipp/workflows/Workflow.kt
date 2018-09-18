@@ -42,9 +42,19 @@ data class WorkflowState<out State : Any, in Event : Any>(
  * the other (and the entire workflow) to be cancelled.
  */
 interface Workflow<out State : Any, in Event : Any, out Result : Any> {
+  /**
+   * Emits the workflows' states, is closed when it's finished, or cancelled when abandoned.
+   */
   val state: ReceiveChannel<WorkflowState<State, Event>>
+
+  /**
+   * Emits the workflow result when it's finished, or cancelled if the workflow is abandoned.
+   */
   val result: Deferred<Result>
 
+  /**
+   * Stops the workflow, cancelling the outputs if it hasn't finished yet.
+   */
   // TODO does this method even need to exist? i suspect all the use cases for it will end up
   // implicitly cancelling the result/state channel anyway
   fun abandon()

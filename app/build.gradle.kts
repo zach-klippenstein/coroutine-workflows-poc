@@ -16,7 +16,7 @@ repositories {
 }
 
 dependencies {
-  compile(project(":workflows-jvm"))
+  compile(project(":workflows-rx2"))
   compile(kotlin("stdlib-jdk8"))
   compile(kotlin("reflect"))
   compile("org.jetbrains.kotlinx:kotlinx-coroutines-core:0.26.0-eap13")

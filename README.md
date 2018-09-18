@@ -13,14 +13,19 @@ I saw it.
 
 ## Contents
 
-There are three modules:
+There are four modules:
 
 1. workflows – the generic `Workflow` and `Reactor` types. This is a multiplatform common module!
    (Almost) pure Kotlin, no JVM.
 2. workflows-jvm – defines a few aliases to JVM-only constructs:
      * `CoroutineName` is, I think probably mistakenly, still in `kotlin-coroutines-core`.
      * A couple utilities for unit tests.
-3. app – a super dumb sample app with 3 screens, using JavaFX.
+3. workflows-rx2 – helper to wrap `Workflow` in a similarly-shaped interface that uses RxJava types
+   for its outputs. RxJava types can be a little easier to work with when wiring a workflow to a
+    UI framework.
+     * `state: ReceiveChannel<WorkflowState<S, E>>` → `state: Observable<WorkflowState<S, E>>`
+     * `result: Deferred<R>` → `result: Maybe<R>`
+4. app – a super dumb sample app with 3 screens, using JavaFX.
 
 ## Workflow
 

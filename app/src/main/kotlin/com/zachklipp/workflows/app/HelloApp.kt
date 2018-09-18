@@ -4,92 +4,92 @@ import com.zachklipp.workflows.WorkflowState
 import com.zachklipp.workflows.app.HelloScreen.EnteringName
 import com.zachklipp.workflows.app.HelloScreen.Landing
 import com.zachklipp.workflows.app.HelloScreen.ShowingGreeting
+import io.reactivex.Observable
+import io.reactivex.disposables.CompositeDisposable
+import io.reactivex.disposables.Disposable
+import io.reactivex.disposables.SerialDisposable
 import javafx.application.Application
 import javafx.scene.Parent
 import javafx.scene.Scene
 import javafx.scene.layout.Pane
 import javafx.stage.Stage
 import javafx.stage.StageStyle.UNIFIED
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.javafx.JavaFx
-import kotlinx.coroutines.launch
-import kotlin.coroutines.CoroutineContext
+import kotlin.reflect.KClass
 
 fun main(args: Array<String>) = Application.launch(HelloApp::class.java, *args)
 
-class HelloApp : Application(), CoroutineScope {
-  private lateinit var appJob: Job
-  //  private val container = Pane()
-  override val coroutineContext: CoroutineContext by lazy { appJob + Dispatchers.JavaFx }
-
+class HelloApp : Application() {
   override fun start(primaryStage: Stage) {
-    appJob = Job()
+    val subs = CompositeDisposable()
     with(primaryStage) {
       initStyle(UNIFIED)
       minWidth = 500.0
       minHeight = 500.0
       scene = Scene(Pane())
-//      sceneProperty().addListener { _, oldValue, newValue ->
-//        if (oldValue == null && newValue != oldValue) show()
-//      }
+      setOnHidden { subs.clear() }
     }
 
-    val workflow = HelloStarter(this).start()
-    launch(onCompletion = { cause ->
-      println("Main coroutine completed: $cause")
-      primaryStage.close()
-    }) {
-      launch(CoroutineName("workflow result handler")) {
-        workflow.result.await()
-        println("Workflow finished, cancelling app job.")
-        appJob.cancel(CancellationException("Workflow finished."))
-      }
-      launch(CoroutineName("workflow state handler")) {
-        var currScreen: HelloScreen? = null
-        var currScreenHolder: ScreenHolder<out HelloScreen>? = null
+    val workflow = HelloStarter(CoroutineScope(Dispatchers.JavaFx)).start()
 
-        workflow.state.consumeEach { state ->
-          primaryStage.title = state.state.title
-          val screen = state.state
+    // Wire up the screens.
+    subs.add(
+        workflow.state.map { Pair(it.state::class, it.state) }
+            .distinctUntilChanged { (type, _) -> type }
+            .map { (type, screen) ->
+              println("showing ${type.simpleName}")
+              screenHolderForScreen(screen::class)
+                  .apply { bindNode(workflow.state) }
+            }
+            .scan { oldHolder, newHolder -> oldHolder.dispose(); newHolder }
+            .subscribe {
+              primaryStage.scene.root = it.view
+              primaryStage.show()
+            })
 
-          if (currScreen == null || screen::class != currScreen!!::class) {
-            println("showing ${screen::class.simpleName}")
-            currScreenHolder = screenHolderForScreen(screen)
-            primaryStage.scene.root = currScreenHolder!!.view
-            primaryStage.show()
-          }
+    // Render the window title.
+    subs.add(
+        workflow.state.map { it.state.title }
+            .subscribe { primaryStage.title = it })
 
-          currScreenHolder!!.bindNode(state)
-          currScreen = screen
+    // Close the app when the workflow finishes.
+    subs.add(
+        workflow.result.subscribe {
+          println("Workflow result emitted, closing primary stage…")
+          primaryStage.close()
+        })
+  }
+}
+
+abstract class ScreenHolder<S : HelloScreen>(
+  private val screenClass: Class<S>
+) {
+  lateinit var view: Parent private set
+  private val sub = SerialDisposable()
+
+  fun bindNode(screens: Observable<WorkflowState<HelloScreen, HelloEvent>>) {
+    view = onCreateNode()
+    val filteredScreens = screens.filter { screenClass.isInstance(it.state) }
+        .map {
+          @Suppress("UNCHECKED_CAST")
+          WorkflowState(it.state as S, it.eventHandler)
         }
-      }
-    }
+    onBindNode(filteredScreens)
   }
+
+  fun dispose() = sub.dispose()
+
+  protected abstract fun onCreateNode(): Parent
+  protected abstract fun onBindNode(screens: Observable<WorkflowState<S, HelloEvent>>): Disposable
 }
 
-abstract class ScreenHolder<S : HelloScreen> {
-  val view: Parent by lazy { onCreateNode() }
-
-  @Suppress("UNCHECKED_CAST")
-  fun bindNode(state: WorkflowState<HelloScreen, HelloEvent>) {
-    val screen = state.state as? S
-        ?: throw IllegalArgumentException("Invalid data type: ${state.state::class}")
-
-    onBindNode(WorkflowState(screen, state.eventHandler))
-  }
-
-  abstract fun onCreateNode(): Parent
-  abstract fun onBindNode(state: WorkflowState<S, HelloEvent>)
+private fun <T : HelloScreen> screenHolderForScreen(
+  screenType: KClass<T>
+): ScreenHolder<out HelloScreen> = when (screenType) {
+  Landing::class -> LandingScreenHolder()
+  EnteringName::class -> EnteringNameScreenHolder()
+  ShowingGreeting::class -> ShowingGreetingScreenHolder()
+  else -> throw IllegalArgumentException("invalid screen type: $screenType")
 }
-
-private fun screenHolderForScreen(screen: HelloScreen): ScreenHolder<out HelloScreen> =
-  when (screen) {
-    Landing -> LandingScreenHolder()
-    is EnteringName -> EnteringNameScreenHolder()
-    is ShowingGreeting -> ShowingGreetingScreenHolder()
-  }

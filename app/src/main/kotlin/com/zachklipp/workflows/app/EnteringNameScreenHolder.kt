@@ -5,6 +5,8 @@ import com.zachklipp.workflows.app.HelloEvent.OnFinishedEnteringName
 import com.zachklipp.workflows.app.HelloEvent.OnNameChanged
 import com.zachklipp.workflows.app.HelloEvent.OnRestart
 import com.zachklipp.workflows.app.HelloScreen.EnteringName
+import io.reactivex.Observable
+import io.reactivex.disposables.Disposable
 import javafx.beans.value.ChangeListener
 import javafx.geometry.Orientation.HORIZONTAL
 import javafx.geometry.Pos.CENTER
@@ -14,7 +16,7 @@ import javafx.scene.control.Label
 import javafx.scene.control.TextField
 import javafx.scene.layout.FlowPane
 
-class EnteringNameScreenHolder : ScreenHolder<EnteringName>() {
+class EnteringNameScreenHolder : ScreenHolder<EnteringName>(EnteringName::class.java) {
   private lateinit var nameField: TextField
   private lateinit var proceed: Button
   private lateinit var restart: Button
@@ -30,7 +32,9 @@ class EnteringNameScreenHolder : ScreenHolder<EnteringName>() {
     alignment = CENTER
   }
 
-  override fun onBindNode(state: WorkflowState<EnteringName, HelloEvent>) {
+  override fun onBindNode(
+    screens: Observable<WorkflowState<EnteringName, HelloEvent>>
+  ): Disposable = screens.subscribe { state ->
     nameField.textProperty()
         .apply {
           if (textListener != null) removeListener(textListener)

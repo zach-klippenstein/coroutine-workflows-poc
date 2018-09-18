@@ -30,3 +30,5 @@ rootProject.name = 'coroutine-workflows-poc'
 include 'app'
 include 'workflows'
 include 'workflows-jvm'
+include 'workflows-rx2'
+

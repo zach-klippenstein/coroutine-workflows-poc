@@ -2,7 +2,6 @@ package com.zachklipp.workflows.app
 
 import com.zachklipp.workflows.Reaction.Companion.Finish
 import com.zachklipp.workflows.Reaction.EnterState
-import com.zachklipp.workflows.Workflow
 import com.zachklipp.workflows.app.HelloEvent.OnExit
 import com.zachklipp.workflows.app.HelloEvent.OnFinishedEnteringName
 import com.zachklipp.workflows.app.HelloEvent.OnGoToGreeting
@@ -12,6 +11,8 @@ import com.zachklipp.workflows.app.HelloScreen.EnteringName
 import com.zachklipp.workflows.app.HelloScreen.Landing
 import com.zachklipp.workflows.app.HelloScreen.ShowingGreeting
 import com.zachklipp.workflows.reactor
+import com.zachklipp.workflows.rx2.RxWorkflow
+import com.zachklipp.workflows.rx2.toRxWorkflow
 import kotlinx.coroutines.CoroutineScope
 
 sealed class HelloScreen(val title: String) {
@@ -28,7 +29,7 @@ sealed class HelloEvent {
   object OnFinishedEnteringName : HelloEvent()
 }
 
-typealias HelloWorkflow = Workflow<HelloScreen, HelloEvent, Unit>
+typealias HelloWorkflow = RxWorkflow<HelloScreen, HelloEvent, Unit>
 
 class HelloStarter(scope: CoroutineScope) : CoroutineScope by scope {
   fun start(): HelloWorkflow = reactor<HelloScreen, HelloEvent, Unit>(Landing) { screen, events ->
@@ -52,5 +53,5 @@ class HelloStarter(scope: CoroutineScope) : CoroutineScope by scope {
       }
       is ShowingGreeting -> null // no other events accepted on this screen
     } ?: throw IllegalStateException("invalid event in $screen: $event")
-  }
+  }.toRxWorkflow()
 }
