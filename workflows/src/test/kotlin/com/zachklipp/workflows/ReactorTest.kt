@@ -2,18 +2,27 @@ package com.zachklipp.workflows
 
 import com.zachklipp.workflows.Reaction.EnterState
 import com.zachklipp.workflows.Reaction.FinishWith
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Dispatchers.Unconfined
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.none
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import kotlin.coroutines.ContinuationInterceptor
+import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.coroutineContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
 class ReactorTest {
-  @Test fun initialState() = runBlocking {
-    val workflow = reactor("initial", reactor = ::testReactor)
+  @Test fun initialState() = runBlocking(CoroutineName("test main")) {
+    val workflow = reactor("initial", context = CoroutineName("reactor"), reactor = ::testReactor)
 
     assertEquals(actual = workflow.state.receive().state, expected = "initial")
     assertFalse(workflow.result.isCompleted)
@@ -30,7 +39,7 @@ class ReactorTest {
   }
 
   @Test fun states() = runBlocking {
-    val workflow = reactor("initial", reactor = ::testReactor)
+    val workflow = reactor("initial", Unconfined, reactor = ::testReactor)
     val state = workflow.state.receive()
     assertEquals(actual = state.state, expected = "initial")
 
@@ -42,7 +51,7 @@ class ReactorTest {
   }
 
   @Test fun finishes() = runBlocking {
-    val workflow = reactor("initial", reactor = ::testReactor)
+    val workflow = reactor("initial", Unconfined, reactor = ::testReactor)
 
     workflow.state.receive()
         .let {
@@ -56,23 +65,58 @@ class ReactorTest {
   }
 
   @Test fun whenReactorThrows() = runBlocking {
-    val workflow = reactor("initial", reactor = ::testReactor)
+    val workflow = reactor("initial", Unconfined, reactor = ::testReactor)
 
     workflow.state.receive()
         .sendEvent("throw(fail)")
 
-    try {
-      workflow.state.receive()
-    } catch (e: RuntimeException) {
-      assertEquals(actual = e.message, expected = "fail")
-    }
-    try {
-      workflow.result.await()
-    } catch (e: RuntimeException) {
-      assertEquals(actual = e.message, expected = "fail")
-    }
+    assertFailsWith<RuntimeException>("fail") { workflow.state.receive() }
+    assertFailsWith<RuntimeException>("fail") { workflow.result.await() }
 
     workflow.abandon()
+  }
+
+  @Test fun reactInvokedFromScopeDispatcher() = runBlocking(CoroutineName("main")) {
+    // This should be a TestCoroutineContext dispatcher, but that's JVM-only for some reason.
+    val reactorDispatcher = Dispatchers.Default
+    val workflow = withContext(reactorDispatcher) { reactor(Unit, reactor = dispatcherReactor) }
+
+    val actualDispatcher = workflow.result.await()
+    assertNotEquals(coroutineContext.dispatcher, actualDispatcher)
+    assertEquals(reactorDispatcher, actualDispatcher)
+  }
+
+  @Test fun reactInvokedFromPassedDispatcher() = runBlocking(CoroutineName("main")) {
+    val reactorDispatcher = Dispatchers.Default
+    val workflow = reactor(Unit, reactorDispatcher, reactor = dispatcherReactor)
+
+    val actualDispatcher = workflow.result.await()
+    assertNotEquals(coroutineContext.dispatcher, actualDispatcher)
+    assertEquals(reactorDispatcher, actualDispatcher)
+  }
+
+  @Test fun reactInvokedFromThisDispatcher() = runBlocking {
+    val workflow = reactor(Unit, reactor = dispatcherReactor)
+
+    assertEquals(coroutineContext.dispatcher, workflow.result.await())
+  }
+
+  /**
+   * Gotcha: if we use withContext, the reactor is run _entirely_ within the enclosing _coroutine_.
+   * All we really want is to share the dispatcher.
+   * What this incorrect behavior means that cancelling the workflow *won't* cancel the react
+   * method, since it's actually running in the parent coroutine.
+   */
+  @Test fun abandoningWorkflowCancelsReactor() = runBlocking(CoroutineName("test main")) {
+    val workflow = reactor<Unit, Nothing, Unit>(Unit, CoroutineName("reactor")) { _, _ ->
+      suspendCancellableCoroutine<Nothing> { /* Suspend forever */ }
+    }
+    assertEquals(Unit, workflow.state.receive().state)
+
+    workflow.abandon()
+
+    assertFailsWith<CancellationException> { workflow.state.none() }
+    assertFailsWith<CancellationException> { workflow.result.await() }
   }
 }
 
@@ -103,7 +147,7 @@ private fun parseReaction(command: String): Reaction<String, String> {
 }
 
 internal inline fun <reified T : Throwable> assertFailsWith(
-  message: String?=null,
+  message: String? = null,
   code: () -> Unit
 ) {
   try {
@@ -120,3 +164,10 @@ internal inline fun <reified T : Throwable> assertFailsWith(
     }
   }
 }
+
+private val dispatcherReactor: Reactor<Unit, Nothing, CoroutineDispatcher> = { _, _ ->
+  FinishWith(coroutineContext.dispatcher)
+}
+
+private val CoroutineContext.dispatcher: CoroutineDispatcher
+  get() = this[ContinuationInterceptor] as CoroutineDispatcher

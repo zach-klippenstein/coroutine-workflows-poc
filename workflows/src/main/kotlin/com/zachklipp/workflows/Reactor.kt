@@ -4,7 +4,9 @@ import com.zachklipp.workflows.Reaction.EnterState
 import com.zachklipp.workflows.Reaction.FinishWith
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.withContext
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 
@@ -22,28 +24,6 @@ sealed class Reaction<out State : Any, out Result : Any> {
 /**
  * Given the current [state][State], and a channel of [events][Event], returns a command value
  * that indicates either the next state for the state machine or the final result.
- *
- * ## Dispatching
- *
- * This method is invoked with the context used to create the [Workflow], but with
- * [Dispatchers.Unconfined] as the dispatcher.
- *
- * Initially I thought it made more sense for this method to be called from the dispatcher from
- * the original [CoroutineScope] used to create the [Workflow].
- *
- * However, in the unit tests that send events, when that happens, the continuation that
- * performs the send seems to be scheduled before this coroutine that calls onReact and
- * eventually suspends putting the channel in a waiting-to-read state.
- *
- * Leaving this invocation in the Unconfined context means the implementor needs to be
- * explicit about their dispatcher if they care, but they should rarely care because:
- *  1. `Reactor` should be a pure function
- *  2. If the UI cares about being on a specific thread, it will control that when receiving
- *     from the state channel.
- *
- * Ultimately, it's simpler to not make any guarantees about which dispatcher is used to invoke
- * this method, since it shouldn't matter in most cases. And if it _is_ significant, the
- * implementor should be explicit anyway.
  *
  * @param State The type that contains all the internal state for the state machine.
  * Usually a sealed class.
@@ -69,37 +49,39 @@ fun <S : Any, E : Any, R : Any> CoroutineScope.reactor(
  * Creates a [Workflow] from this [Reactor].
  *
  * @receiver The coroutine scope used to host the coroutine that runs the reactor loop.
- * The loop will always use the [Dispatchers.Unconfined] dispatcher for itself, however
- * [Reactor] is invoked from this scope directly, including any dispatcher it is configured
- * with.
+ * [reactor] is invoked from this scope + [context].
  * @param initialReaction The initial state to pass to [Reactor] or the result if the
  * workflow should be started as finished.
+ * @param context Any additional [CoroutineContext] elements to add to the context from the scope.
+ * [reactor] is invoked from the calling scope + this context.
  */
 fun <S : Any, E : Any, R : Any> CoroutineScope.reactor(
   initialReaction: Reaction<S, R>,
   context: CoroutineContext = EmptyCoroutineContext,
   reactor: Reactor<S, E, R>
-): Workflow<S, E, R> = workflow(context + Dispatchers.Unconfined) {
-  var currentReaction = initialReaction
-  while (currentReaction is EnterState) {
-    val state = currentReaction.state
-    send(state)
+): Workflow<S, E, R> {
 
-    /**
-     * Initially I thought it made more sense for `onReact` to be called from the dispatcher from
-     * the original [CoroutineScope].
-     *
-     * However, in the unit tests that send events, when that happens, the continuation that
-     * performs the send seems to be scheduled before this coroutine that calls onReact and
-     * eventually suspends putting the channel in a waiting-to-read state.
-     *
-     * Leaving this invocation in the Unconfined context means the implementor needs to be
-     * explicit about their dispatcher if they care, but they should rarely care because:
-     *  1. onReact should be a pure function
-     *  2. If the UI cares about being on a specific thread, it will control that when receiving
-     *     from the state channel.
-     */
-    currentReaction = reactor(state, this)
+  // Use the Unconfined dispatcher for the workflow _machinery_, to reduce the dispatch overhead,
+  // but we'll jump back to the passed-in dispatcher to run `reactor`. The fact that we're
+  // overriding the context for the reactor logic is an implementation detail, so it shouldn't
+  // leak into the reactor.
+  return workflow(context + Dispatchers.Unconfined) {
+    // Snapshot the current scope's context with the additional context so we call react from the
+    // right context.
+    // We also need to use the workflow job as the parent, otherwise cancelling the workflow
+    // Job won't actually cancel if the reactor method is suspended (since it will be running
+    // with the workflow's parent job, not the workflow job).
+    val reactContext = this@reactor.coroutineContext + context + coroutineContext[Job]!!
+
+    var currentReaction = initialReaction
+    while (currentReaction is EnterState) {
+      val state = currentReaction.state
+      send(state)
+
+      currentReaction = withContext(reactContext) {
+        reactor(state, this@workflow)
+      }
+    }
+    return@workflow (currentReaction as FinishWith).result
   }
-  return@workflow (currentReaction as FinishWith).result
 }

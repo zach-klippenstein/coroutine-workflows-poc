@@ -76,6 +76,7 @@ fun <S : Any, E : Any, R : Any> CoroutineScope.workflow(
     override val result: Deferred<R> get() = result
 
     override fun abandon() {
+      // Ignore the return value – we don't really care if the workflow was already finished.
       result.cancel(CancellationException("Workflow abandoned."))
     }
   }
