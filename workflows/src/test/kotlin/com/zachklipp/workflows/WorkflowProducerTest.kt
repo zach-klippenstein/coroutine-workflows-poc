@@ -1,7 +1,9 @@
 package com.zachklipp.workflows
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.none
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -89,6 +91,78 @@ class WorkflowProducerTest {
     assertFailsWith<CancellationException>("Workflow abandoned.") {
       workflow.result.await()
     }
+  }
+
+  @Test fun channelToWorkflow() = runBlocking {
+    val channel = Channel<String>()
+    val workflow = channel.toWorkflow()
+
+    assertTrue(workflow.state.isEmpty)
+    assertFalse(workflow.result.isCompleted)
+
+    channel.send("foo")
+
+    assertEquals("foo", workflow.state.receive().state)
+    assertTrue(workflow.state.isEmpty)
+    assertFalse(workflow.result.isCompleted)
+
+    channel.close()
+
+    assertTrue(workflow.state.none())
+    assertEquals(Unit, workflow.result.await())
+  }
+
+  @Test fun channelToWorkflowCloseError() = runBlocking {
+    val channel = Channel<String>()
+    val workflow = channel.toWorkflow()
+
+    channel.close(RuntimeException("fail"))
+
+    assertFailsWith<RuntimeException>("fail") { workflow.state.none() }
+    assertFailsWith<RuntimeException>("fail") { workflow.result.await() }
+  }
+
+  @Test fun channelToWorkflowCancel() = runBlocking {
+    val channel = Channel<String>()
+    val workflow = channel.toWorkflow()
+
+    channel.cancel()
+
+    assertTrue(workflow.state.none())
+    assertEquals(Unit, workflow.result.await())
+  }
+
+  @Test fun deferredToWorkflow() = runBlocking {
+    val deferred = CompletableDeferred<String>()
+    val workflow = deferred.toWorkflow()
+
+    assertTrue(workflow.state.isEmpty)
+    assertFalse(workflow.result.isCompleted)
+
+    deferred.complete("foo")
+
+    assertTrue(workflow.state.none())
+    assertEquals("foo", workflow.result.await())
+  }
+
+  @Test fun deferredToWorkflowCompleteError() = runBlocking {
+    val deferred = CompletableDeferred<String>()
+    val workflow = deferred.toWorkflow()
+
+    deferred.completeExceptionally(RuntimeException("fail"))
+
+    assertFailsWith<RuntimeException>("fail") { workflow.state.none() }
+    assertFailsWith<RuntimeException>("fail") { workflow.result.await() }
+  }
+
+  @Test fun deferredToWorkflowCancel() = runBlocking {
+    val deferred = CompletableDeferred<String>()
+    val workflow = deferred.toWorkflow()
+
+    deferred.cancel()
+
+    assertFailsWith<CancellationException> { workflow.state.none() }
+    assertFailsWith<CancellationException> { workflow.result.await() }
   }
 }
 

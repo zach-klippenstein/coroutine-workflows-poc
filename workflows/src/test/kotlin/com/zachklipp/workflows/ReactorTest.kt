@@ -103,7 +103,7 @@ private fun parseReaction(command: String): Reaction<String, String> {
 }
 
 internal inline fun <reified T : Throwable> assertFailsWith(
-  message: String,
+  message: String?=null,
   code: () -> Unit
 ) {
   try {
@@ -111,7 +111,7 @@ internal inline fun <reified T : Throwable> assertFailsWith(
     fail("Expected exception to be thrown.")
   } catch (e: Throwable) {
     if (e is T) {
-      assertEquals(message, e.message)
+      if (message != null) assertEquals(message, e.message)
     } else {
       throw AssertionError(
           "Expected an exception of type ${T::class}, " +

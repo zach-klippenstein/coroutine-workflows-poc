@@ -5,14 +5,14 @@ import kotlinx.coroutines.CompletionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.channels.map
 import kotlinx.coroutines.channels.toChannel
-import kotlinx.coroutines.currentScope
-import kotlinx.coroutines.plus
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 
@@ -23,36 +23,6 @@ import kotlin.coroutines.EmptyCoroutineContext
 interface WorkflowProducerScope<S : Any, E : Any> : CoroutineScope,
     SendChannel<S>,
     ReceiveChannel<E>
-
-/**
- * Converts a [ReceiveChannel] to a [Workflow] that doesn't accept any input and has no result,
- * using the current scope.
- */
-suspend fun <S : Any> ReceiveChannel<S>.asWorkflow(
-  coroutineContext: CoroutineContext = EmptyCoroutineContext
-): Workflow<S, Nothing, Unit> = currentScope { asWorkflow(this + coroutineContext) }
-
-/**
- * Converts a [ReceiveChannel] to a [Workflow] that doesn't accept any input and has no result.
- */
-fun <S : Any> ReceiveChannel<S>.asWorkflow(
-  coroutineScope: CoroutineScope
-): Workflow<S, Nothing, Unit> = coroutineScope.workflow { this@asWorkflow.toChannel(this) }
-
-/**
- * Converts a [Deferred] to an already-finished [Workflow] with the result of the [Deferred],
- * using the current scope.
- */
-suspend fun <R : Any> Deferred<R>.asWorkflow(
-  coroutineContext: CoroutineContext = EmptyCoroutineContext
-): Workflow<Nothing, Nothing, R> = currentScope { asWorkflow(this + coroutineContext) }
-
-/**
- * Converts a [Deferred] to an already-finished [Workflow] with the result of the [Deferred].
- */
-fun <R : Any> Deferred<R>.asWorkflow(
-  coroutineScope: CoroutineScope
-): Workflow<Nothing, Nothing, R> = coroutineScope.workflow { this@asWorkflow.await() }
 
 /**
  * Creates a [Workflow] by launching a coroutine that is basically a combination of
@@ -109,4 +79,24 @@ fun <S : Any, E : Any, R : Any> CoroutineScope.workflow(
       result.cancel(CancellationException("Workflow abandoned."))
     }
   }
+}
+
+/**
+ * Converts a [ReceiveChannel] to a [Workflow] that doesn't accept any input and has no result.
+ *
+ * This function [consumes][ReceiveChannel.consume] all elements of the original [ReceiveChannel].
+ */
+fun <S : Any> ReceiveChannel<S>.toWorkflow(
+  context: CoroutineContext = Dispatchers.Unconfined
+): Workflow<S, Nothing, Unit> = GlobalScope.workflow(context) {
+  this@toWorkflow.toChannel(this)
+}
+
+/**
+ * Converts a [Deferred] to an already-finished [Workflow] with the result of the [Deferred].
+ */
+fun <R : Any> Deferred<R>.toWorkflow(
+  context: CoroutineContext = Dispatchers.Unconfined
+): Workflow<Nothing, Nothing, R> = GlobalScope.workflow(context) {
+  this@toWorkflow.await()
 }
