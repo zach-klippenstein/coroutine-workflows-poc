@@ -79,7 +79,7 @@ abstract class ScreenHolder<S : HelloScreen>(
     val filteredScreens = screens.filter { screenClass.isInstance(it.state) }
         .map {
           @Suppress("UNCHECKED_CAST")
-          WorkflowState(it.state as S, it.eventHandler)
+          WorkflowState(it.state as S, it.sendEvent)
         }
     onBindNode(filteredScreens)
   }

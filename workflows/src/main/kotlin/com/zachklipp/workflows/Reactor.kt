@@ -5,7 +5,6 @@ import com.zachklipp.workflows.Reaction.FinishWith
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
@@ -22,7 +21,7 @@ sealed class Reaction<out State : Any, out Result : Any> {
 }
 
 /**
- * Given the current state, and a [channel][ReceiveChannel] of events, returns a command value
+ * Given the current state, and a [channel][EventChannel] of events, returns a command value
  * that indicates either the next state for the state machine or the final result.
  *
  * @param State The type that contains all the internal state for the state machine.
@@ -32,7 +31,7 @@ sealed class Reaction<out State : Any, out Result : Any> {
  * @param Result The type that represents all the possible terminal states of the state machine.
  */
 typealias Reactor<State, Event, Result> =
-    suspend (state: State, events: ReceiveChannel<Event>) -> Reaction<State, Result>
+    suspend EventChannel<Event>.(state: State) -> Reaction<State, Result>
 
 /**
  * Returns a running [Workflow] initially in [initialState] that is defined by [reactor].
@@ -68,7 +67,7 @@ fun <S : Any, E : Any, R : Any> CoroutineScope.reactor(
       send(state)
 
       currentReaction = withContext(reactContext) {
-        reactor(state, this@workflow)
+        reactor(state)
       }
     }
     return@workflow (currentReaction as FinishWith).result

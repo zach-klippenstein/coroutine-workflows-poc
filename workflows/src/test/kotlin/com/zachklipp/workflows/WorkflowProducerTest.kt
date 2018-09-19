@@ -21,7 +21,9 @@ class WorkflowProducerTest {
     initialState.sendEvent("doing things!")
 
     // Workflow should now be finished.
-    assertFalse(initialState.eventHandler("nope"))
+    assertFailsWith<IllegalStateException>("Workflow not ready to accept nope") {
+      initialState.sendEvent("nope")
+    }
     assertTrue(workflow.state.none())
     assertEquals("got event: doing things!", workflow.result.await())
   }
