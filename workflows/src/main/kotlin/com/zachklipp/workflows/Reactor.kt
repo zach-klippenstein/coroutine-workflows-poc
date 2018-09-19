@@ -5,7 +5,6 @@ import com.zachklipp.workflows.Reaction.FinishWith
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
@@ -24,10 +23,10 @@ sealed class Reaction<out State : Any, out Result : Any> {
 /**
  * A [CoroutineScope] that is also a [ReceiveChannel] for receiving workflow events.
  */
-interface ReactorScope<E : Any> : CoroutineScope, ReceiveChannel<E>
+interface ReactorScope<E : Any> : CoroutineScope, EventChannel<E>
 
 /**
- * Given the current state, and a [channel][ReceiveChannel] of events, returns a command value
+ * Given the current state, and a [channel][EventChannel] of events, returns a command value
  * that indicates either the next state for the state machine or the final result.
  *
  * @param State The type that contains all the internal state for the state machine.
@@ -75,7 +74,7 @@ fun <S : Any, E : Any, R : Any> CoroutineScope.reactor(
       currentReaction = withContext(reactContext) {
         val reactorScope = object : ReactorScope<E>,
             CoroutineScope by this,
-            ReceiveChannel<E> by this@workflow {}
+            EventChannel<E> by this@workflow {}
         reactorScope.reactor(state)
       }
     }
