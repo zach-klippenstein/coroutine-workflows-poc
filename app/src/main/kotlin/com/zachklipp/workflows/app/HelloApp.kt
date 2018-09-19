@@ -16,7 +16,9 @@ import javafx.stage.Stage
 import javafx.stage.StageStyle.UNIFIED
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.javafx.JavaFx
+import kotlinx.coroutines.launch
 import kotlin.reflect.KClass
 
 fun main(args: Array<String>) = Application.launch(HelloApp::class.java, *args)
@@ -34,12 +36,15 @@ class HelloApp : Application() {
 
     val workflow = HelloStarter(CoroutineScope(Dispatchers.JavaFx)).start()
 
+    GlobalScope.launch {
+      helloCliApp(workflow)
+    }
+
     // Wire up the screens.
     subs.add(
         workflow.state.map { Pair(it.state::class, it.state) }
             .distinctUntilChanged { (type, _) -> type }
-            .map { (type, screen) ->
-              println("showing ${type.simpleName}")
+            .map { (_, screen) ->
               screenHolderForScreen(screen::class)
                   .apply { bindNode(workflow.state) }
             }

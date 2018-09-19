@@ -43,8 +43,8 @@ class EnteringNameScreenHolder : ScreenHolder<EnteringName>(EnteringName::class.
           }
           addListener(textListener)
         }
-    nameField.setOnAction { state.sendEvent(OnFinishedEnteringName) }
-    proceed.setOnMouseClicked { state.sendEvent(OnFinishedEnteringName) }
+    nameField.setOnAction { state.sendEvent(OnFinishedEnteringName(nameField.text)) }
+    proceed.setOnMouseClicked { state.sendEvent(OnFinishedEnteringName(nameField.text)) }
     restart.setOnMouseClicked { state.sendEvent(OnRestart) }
   }
 }

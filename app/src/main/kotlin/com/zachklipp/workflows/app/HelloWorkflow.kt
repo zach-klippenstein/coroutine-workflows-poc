@@ -26,7 +26,7 @@ sealed class HelloEvent {
   object OnExit : HelloEvent()
   object OnGoToGreeting : HelloEvent()
   data class OnNameChanged(val name: String) : HelloEvent()
-  object OnFinishedEnteringName : HelloEvent()
+  data class OnFinishedEnteringName(val name: String) : HelloEvent()
 }
 
 typealias HelloWorkflow = RxWorkflow<HelloScreen, HelloEvent, Unit>
@@ -48,7 +48,7 @@ class HelloStarter(scope: CoroutineScope) : CoroutineScope by scope {
       }
       is EnteringName -> when (event) {
         is OnNameChanged -> EnterState(screen.copy(name = event.name))
-        OnFinishedEnteringName -> EnterState(ShowingGreeting(screen.name))
+        is OnFinishedEnteringName -> EnterState(ShowingGreeting(event.name))
         else -> null
       }
       is ShowingGreeting -> null // no other events accepted on this screen

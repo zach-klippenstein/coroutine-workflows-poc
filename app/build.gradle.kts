@@ -1,3 +1,5 @@
+import org.gradle.internal.deployment.RunApplication
+import org.gradle.internal.impldep.aQute.bnd.build.Run
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
@@ -26,6 +28,7 @@ dependencies {
 
 configure<ApplicationPluginConvention> {
   mainClassName = "com.zachklipp.workflows.app.HelloAppKt"
+//  mainClassName = "com.zachklipp.workflows.app.HelloCliAppKt"
 }
 
 configure<JavaPluginConvention> {
@@ -33,4 +36,8 @@ configure<JavaPluginConvention> {
 }
 tasks.withType<KotlinCompile> {
   kotlinOptions.jvmTarget = "1.8"
+}
+
+tasks.withType<JavaExec> {
+  standardInput = System.`in`
 }
