@@ -18,7 +18,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
-import kotlin.test.fail
 
 class ReactorTest {
   @Test fun initialState() = runBlocking(CoroutineName("test main")) {
@@ -28,14 +27,6 @@ class ReactorTest {
     assertFalse(workflow.result.isCompleted)
 
     workflow.abandon()
-  }
-
-  @Test fun initiallyFinished() = runBlocking {
-    val workflow = reactor(FinishWith("done"), reactor = ::testReactor)
-
-    assertTrue(workflow.state.none())
-    assertTrue(workflow.state.isClosedForReceive)
-    assertEquals(actual = workflow.result.await(), expected = "done")
   }
 
   @Test fun states() = runBlocking {

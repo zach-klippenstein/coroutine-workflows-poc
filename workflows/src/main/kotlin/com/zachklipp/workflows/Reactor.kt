@@ -22,7 +22,7 @@ sealed class Reaction<out State : Any, out Result : Any> {
 }
 
 /**
- * Given the current [state][State], and a channel of [events][Event], returns a command value
+ * Given the current state, and a [channel][ReceiveChannel] of events, returns a command value
  * that indicates either the next state for the state machine or the final result.
  *
  * @param State The type that contains all the internal state for the state machine.
@@ -35,32 +35,21 @@ typealias Reactor<State, Event, Result> =
     suspend (state: State, events: ReceiveChannel<Event>) -> Reaction<State, Result>
 
 /**
- * Create a running [Workflow] initially in [initialState] that is defined by [reactor].
+ * Returns a running [Workflow] initially in [initialState] that is defined by [reactor].
  *
+ * @receiver The coroutine scope used to host the coroutine that runs the reactor loop.
+ * [reactor] is invoked from this scope + [context].
+ * @param initialState The initial state to pass to [Reactor] and to emit from
+ * [state][Workflow.state].
+ * @param context Any additional [CoroutineContext] elements to add to the context from the scope.
+ * [reactor] is invoked from the calling scope + this context.
  * @param reactor See [Reactor] for documentation.
  */
 fun <S : Any, E : Any, R : Any> CoroutineScope.reactor(
   initialState: S,
   context: CoroutineContext = EmptyCoroutineContext,
   reactor: Reactor<S, E, R>
-) = reactor(EnterState(initialState), context, reactor)
-
-/**
- * Creates a [Workflow] from this [Reactor].
- *
- * @receiver The coroutine scope used to host the coroutine that runs the reactor loop.
- * [reactor] is invoked from this scope + [context].
- * @param initialReaction The initial state to pass to [Reactor] or the result if the
- * workflow should be started as finished.
- * @param context Any additional [CoroutineContext] elements to add to the context from the scope.
- * [reactor] is invoked from the calling scope + this context.
- */
-fun <S : Any, E : Any, R : Any> CoroutineScope.reactor(
-  initialReaction: Reaction<S, R>,
-  context: CoroutineContext = EmptyCoroutineContext,
-  reactor: Reactor<S, E, R>
 ): Workflow<S, E, R> {
-
   // Use the Unconfined dispatcher for the workflow _machinery_, to reduce the dispatch overhead,
   // but we'll jump back to the passed-in dispatcher to run `reactor`. The fact that we're
   // overriding the context for the reactor logic is an implementation detail, so it shouldn't
@@ -73,7 +62,7 @@ fun <S : Any, E : Any, R : Any> CoroutineScope.reactor(
     // with the workflow's parent job, not the workflow job).
     val reactContext = this@reactor.coroutineContext + context + coroutineContext[Job]!!
 
-    var currentReaction = initialReaction
+    var currentReaction: Reaction<S, R> = EnterState(initialState)
     while (currentReaction is EnterState) {
       val state = currentReaction.state
       send(state)

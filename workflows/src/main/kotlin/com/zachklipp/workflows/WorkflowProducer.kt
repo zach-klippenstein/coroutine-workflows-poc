@@ -1,6 +1,7 @@
 package com.zachklipp.workflows
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CompletionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -82,6 +83,9 @@ fun <S : Any, E : Any, R : Any> CoroutineScope.workflow(
   }
 }
 
+fun <R : Any> finishedWorkflow(result: R): Workflow<Nothing, Any, R> =
+  CompletableDeferred(result).toWorkflow()
+
 /**
  * Converts a [ReceiveChannel] to a [Workflow] that doesn't accept any input and has no result.
  *
@@ -98,6 +102,6 @@ fun <S : Any> ReceiveChannel<S>.toWorkflow(
  */
 fun <R : Any> Deferred<R>.toWorkflow(
   context: CoroutineContext = Dispatchers.Unconfined
-): Workflow<Nothing, Nothing, R> = GlobalScope.workflow(context) {
+): Workflow<Nothing, Any, R> = GlobalScope.workflow(context) {
   this@toWorkflow.await()
 }
