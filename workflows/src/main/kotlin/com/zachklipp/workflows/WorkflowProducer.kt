@@ -48,7 +48,7 @@ fun <S : Any, E : Any, R : Any> CoroutineScope.workflow(
   block: suspend WorkflowProducerScope<S, E>.() -> R
 ): Workflow<S, E, R> {
   val stateChannel = Channel<S>()
-  val eventChannel = EventChannelImpl<E>()
+  val eventChannel = EventChannelSource<E>()
 
   val result = async(
       context = context,

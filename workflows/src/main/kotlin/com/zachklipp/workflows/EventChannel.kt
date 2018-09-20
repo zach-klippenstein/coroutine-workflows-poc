@@ -1,6 +1,6 @@
 package com.zachklipp.workflows
 
-import com.zachklipp.workflows.EventChannelImpl.Clause
+import com.zachklipp.workflows.EventChannelSource.Clause
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.DisposableHandle
 import kotlinx.coroutines.intrinsics.startCoroutineCancellable
@@ -39,7 +39,7 @@ interface EventChannel<E : Any> {
 /**
  * Implements the actual selection and send logic for an [EventChannel].
  */
-internal class EventChannelImpl<E : Any> : EventChannel<E> {
+class EventChannelSource<E : Any> : EventChannel<E> {
   data class Clause<E : Any, F : E, R>(
     val predicate: (E) -> F?,
     val select: SelectInstance<R>,
@@ -58,7 +58,7 @@ internal class EventChannelImpl<E : Any> : EventChannel<E> {
   }
 
   override fun <R> SelectBuilder<R>.events(block: EventSelectBuilder<E, R>.() -> Unit) {
-    EventSelectBuilder(this, this@EventChannelImpl).block()
+    EventSelectBuilder(this, this@EventChannelSource).block()
   }
 
   fun send(event: E) {
@@ -83,7 +83,7 @@ internal class EventChannelImpl<E : Any> : EventChannel<E> {
     }
   }
 
-  fun <F : E, R> addClause(clause: Clause<E, F, R>) {
+  internal fun <F : E, R> addClause(clause: Clause<E, F, R>) {
     // Short-circuit if another clause already beat us to it.
     if (clause.select.isSelected) return
     // As soon as the selection race is over, clear our clause list.
@@ -97,7 +97,7 @@ internal class EventChannelImpl<E : Any> : EventChannel<E> {
 
 class EventSelectBuilder<E : Any, R> internal constructor(
   private val selectBuilder: SelectBuilder<R>,
-  private val eventChannel: EventChannelImpl<E>
+  private val eventChannel: EventChannelSource<E>
 ) {
   fun <F : E> onEvent(
     expectedEvent: F,

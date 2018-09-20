@@ -21,7 +21,7 @@ private sealed class Foo {
 
 class EventChannelTest {
   @Test fun singleValueMatching() = runBlocking {
-    val eventChannel = EventChannelImpl<Foo>()
+    val eventChannel = EventChannelSource<Foo>()
     val result = async(Unconfined) {
       with(eventChannel) {
         select<String> {
@@ -38,7 +38,7 @@ class EventChannelTest {
   }
 
   @Test fun singleValueNotMatching()  {
-    val eventChannel = EventChannelImpl<Foo>()
+    val eventChannel = EventChannelSource<Foo>()
     val result = GlobalScope.async(Unconfined) {
       with(eventChannel) {
         select<String> {
@@ -56,7 +56,7 @@ class EventChannelTest {
   }
 
   @Test fun selectTest() = runBlocking {
-    val eventChannel = EventChannelImpl<Foo>()
+    val eventChannel = EventChannelSource<Foo>()
     launch(Unconfined) {
       with(eventChannel) {
 
