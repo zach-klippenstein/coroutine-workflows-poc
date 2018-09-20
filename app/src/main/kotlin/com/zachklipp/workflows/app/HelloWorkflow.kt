@@ -32,8 +32,8 @@ sealed class HelloEvent {
 typealias HelloWorkflow = RxWorkflow<HelloScreen, HelloEvent, Unit>
 
 class HelloStarter(scope: CoroutineScope) : CoroutineScope by scope {
-  fun start(): HelloWorkflow = reactor<HelloScreen, HelloEvent, Unit>(Landing) { screen, events ->
-    val event = events.receive()
+  fun start(): HelloWorkflow = reactor<HelloScreen, HelloEvent, Unit>(Landing) { screen ->
+    val event = receive()
 
     // Handle the common events.
     when (event) {
