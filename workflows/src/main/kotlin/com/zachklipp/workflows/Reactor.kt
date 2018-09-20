@@ -22,6 +22,11 @@ sealed class Reaction<out State : Any, out Result : Any> {
 }
 
 /**
+ * A [CoroutineScope] that is also a [ReceiveChannel] for receiving workflow events.
+ */
+interface ReactorScope<E : Any> : CoroutineScope, ReceiveChannel<E>
+
+/**
  * Given the current state, and a [channel][ReceiveChannel] of events, returns a command value
  * that indicates either the next state for the state machine or the final result.
  *
@@ -32,7 +37,7 @@ sealed class Reaction<out State : Any, out Result : Any> {
  * @param Result The type that represents all the possible terminal states of the state machine.
  */
 typealias Reactor<State, Event, Result> =
-    suspend (state: State, events: ReceiveChannel<Event>) -> Reaction<State, Result>
+    suspend ReactorScope<Event>.(state: State) -> Reaction<State, Result>
 
 /**
  * Returns a running [Workflow] initially in [initialState] that is defined by [reactor].
@@ -68,7 +73,10 @@ fun <S : Any, E : Any, R : Any> CoroutineScope.reactor(
       send(state)
 
       currentReaction = withContext(reactContext) {
-        reactor(state, this@workflow)
+        val reactorScope = object : ReactorScope<E>,
+            CoroutineScope by this,
+            ReceiveChannel<E> by this@workflow {}
+        reactorScope.reactor(state)
       }
     }
     return@workflow (currentReaction as FinishWith).result

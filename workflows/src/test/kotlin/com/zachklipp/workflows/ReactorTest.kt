@@ -6,13 +6,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Dispatchers.Unconfined
-import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.none
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.ContinuationInterceptor
 import kotlin.coroutines.CoroutineContext
-import kotlin.coroutines.coroutineContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -21,7 +19,7 @@ import kotlin.test.assertTrue
 
 class ReactorTest {
   @Test fun initialState() = runBlocking(CoroutineName("test main")) {
-    val workflow = reactor("initial", context = CoroutineName("reactor"), reactor = ::testReactor)
+    val workflow = reactor("initial", context = CoroutineName("reactor")) { testReactor(it) }
 
     assertEquals(actual = workflow.state.receive().state, expected = "initial")
     assertFalse(workflow.result.isCompleted)
@@ -30,7 +28,7 @@ class ReactorTest {
   }
 
   @Test fun states() = runBlocking {
-    val workflow = reactor("initial", Unconfined, reactor = ::testReactor)
+    val workflow = reactor("initial", Unconfined) { testReactor(it) }
     val state = workflow.state.receive()
     assertEquals(actual = state.state, expected = "initial")
 
@@ -42,7 +40,7 @@ class ReactorTest {
   }
 
   @Test fun finishes() = runBlocking {
-    val workflow = reactor("initial", Unconfined, reactor = ::testReactor)
+    val workflow = reactor("initial", Unconfined) { testReactor(it) }
 
     workflow.state.receive()
         .let {
@@ -56,7 +54,7 @@ class ReactorTest {
   }
 
   @Test fun whenReactorThrows() = runBlocking {
-    val workflow = reactor("initial", Unconfined, reactor = ::testReactor)
+    val workflow = reactor("initial", Unconfined) { testReactor(it) }
 
     workflow.state.receive()
         .sendEvent("throw(fail)")
@@ -99,7 +97,7 @@ class ReactorTest {
    * method, since it's actually running in the parent coroutine.
    */
   @Test fun abandoningWorkflowCancelsReactor() = runBlocking(CoroutineName("test main")) {
-    val workflow = reactor<Unit, Nothing, Unit>(Unit, CoroutineName("reactor")) { _, _ ->
+    val workflow = reactor<Unit, Nothing, Unit>(Unit, CoroutineName("reactor")) { _ ->
       suspendCancellableCoroutine<Nothing> { /* Suspend forever */ }
     }
     assertEquals(Unit, workflow.state.receive().state)
@@ -111,12 +109,9 @@ class ReactorTest {
   }
 }
 
-suspend fun testReactor(
-  state: String,
-  events: ReceiveChannel<String>
-): Reaction<String, String> {
+suspend fun ReactorScope<String>.testReactor(state: String): Reaction<String, String> {
   println("waiting for command… [$coroutineContext]")
-  val event = events.receive()
+  val event = receive()
   println("In state '$state', got event '$event'…")
   return parseReaction(event).also { println("next state: $it") }
 }
@@ -137,7 +132,7 @@ private fun parseReaction(command: String): Reaction<String, String> {
   }
 }
 
-private val dispatcherReactor: Reactor<Unit, Nothing, CoroutineDispatcher> = { _, _ ->
+private val dispatcherReactor: Reactor<Unit, Nothing, CoroutineDispatcher> = {
   FinishWith(coroutineContext.dispatcher)
 }
 

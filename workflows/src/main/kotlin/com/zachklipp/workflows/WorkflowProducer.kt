@@ -21,7 +21,7 @@ import kotlin.coroutines.EmptyCoroutineContext
  * A [CoroutineScope] that is also a [ReceiveChannel] for receiving workflow events, and a
  * [SendChannel] for emitting workflow state.
  */
-interface WorkflowProducerScope<S : Any, E : Any> : CoroutineScope,
+interface WorkflowScope<S : Any, E : Any> : CoroutineScope,
     SendChannel<S>,
     ReceiveChannel<E>
 
@@ -45,7 +45,7 @@ fun <S : Any, E : Any, R : Any> CoroutineScope.workflow(
   context: CoroutineContext = EmptyCoroutineContext,
   start: CoroutineStart = CoroutineStart.DEFAULT,
   onCompletion: CompletionHandler? = null,
-  block: suspend WorkflowProducerScope<S, E>.() -> R
+  block: suspend WorkflowScope<S, E>.() -> R
 ): Workflow<S, E, R> {
   val stateChannel = Channel<S>()
   val eventChannel = Channel<E>()
@@ -60,7 +60,7 @@ fun <S : Any, E : Any, R : Any> CoroutineScope.workflow(
         eventChannel.cancel(cause)
         onCompletion?.invoke(cause)
       }) {
-    val result = object : WorkflowProducerScope<S, E>,
+    val result = object : WorkflowScope<S, E>,
         CoroutineScope by this,
         SendChannel<S> by stateChannel,
         ReceiveChannel<E> by eventChannel {}.block()
