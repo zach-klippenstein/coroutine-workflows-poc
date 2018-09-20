@@ -3,6 +3,7 @@ package com.zachklipp.workflows
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.none
 import kotlin.test.Test
@@ -35,13 +36,54 @@ class WorkflowProducerTest {
     }
   }
 
-  @Test fun throws() = runBlocking {
+  @Test fun throwsImmediately_whenDispatched() = runBlocking {
     val workflow = workflow<String, String, String> {
       throw RuntimeException("fail")
     }
 
     assertFailsWith<RuntimeException>("fail") { workflow.state.none() }
     assertFailsWith<RuntimeException>("fail") { workflow.result.await() }
+  }
+
+  @Test fun throwsImmediately_whenUndispatched() = runBlocking(Dispatchers.Unconfined) {
+    val workflow = workflow<String, String, String> {
+      throw RuntimeException("fail")
+    }
+
+    assertFailsWith<RuntimeException>("fail") { workflow.state.none() }
+    assertFailsWith<RuntimeException>("fail") { workflow.result.await() }
+  }
+
+  @Test fun throwsAfterGettingEvent_whenDispatched() = runBlocking {
+    val workflow = workflow<Unit, String, String> {
+      send(Unit)
+      val event = receive()
+      throw IllegalArgumentException("invalid event: $event")
+    }
+
+    // This shouldn't fail.
+    workflow.state.receive()
+        .sendEvent("hello")
+
+    // Now it should fail.
+    assertFailsWith<RuntimeException>("invalid event: hello") { workflow.state.none() }
+    assertFailsWith<RuntimeException>("invalid event: hello") { workflow.result.await() }
+  }
+
+  @Test fun throwsAfterGettingEvent_whenUndispatched() = runBlocking {
+    val workflow = workflow<Unit, String, String>(Dispatchers.Unconfined) {
+      send(Unit)
+      val event = receive()
+      throw IllegalArgumentException("invalid event: $event")
+    }
+
+    // This shouldn't fail.
+    workflow.state.receive()
+        .sendEvent("hello")
+
+    // Now it should fail.
+    assertFailsWith<RuntimeException>("invalid event: hello") { workflow.state.none() }
+    assertFailsWith<RuntimeException>("invalid event: hello") { workflow.result.await() }
   }
 
   @Test fun cancellingStateNormallyCancelsChannels() = runBlocking {
