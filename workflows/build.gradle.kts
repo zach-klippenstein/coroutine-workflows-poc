@@ -16,6 +16,4 @@ repositories {
 dependencies {
   compile(kotlin("stdlib-common"))
   compile("org.jetbrains.kotlinx:kotlinx-coroutines-core-common:0.26.0-eap13")
-  testCompile("org.jetbrains.kotlin:kotlin-test-common:1.3-M2")
-  testCompile("org.jetbrains.kotlin:kotlin-test-annotations-common:1.3-M2")
 }

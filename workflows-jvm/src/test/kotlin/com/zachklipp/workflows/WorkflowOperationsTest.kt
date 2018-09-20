@@ -6,12 +6,15 @@ import kotlinx.coroutines.channels.produce
 import kotlinx.coroutines.channels.toList
 import kotlinx.coroutines.currentScope
 import kotlinx.coroutines.yield
+import org.junit.Rule
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class WorkflowOperationsTest {
-  @Test fun mapState() = runBlocking {
+  @Rule @JvmField val testScope = CoroutineTestScope()
+
+  @Test fun mapState() = testScope {
     val source = workflow<Int, Nothing, Unit> {
       send(1)
       send(2)
@@ -23,7 +26,7 @@ class WorkflowOperationsTest {
     assertEquals(Unit, workflow.result.await())
   }
 
-  @Test fun mapStateSuspending() = runBlocking {
+  @Test fun mapStateSuspending() = testScope {
     val source = workflow<Int, Nothing, Unit> {
       send(1)
       send(2)
@@ -35,7 +38,7 @@ class WorkflowOperationsTest {
     assertEquals(Unit, workflow.result.await())
   }
 
-  @Test fun flatMapState() = runBlocking {
+  @Test fun flatMapState() = testScope {
     val source = workflow<Int, Nothing, Unit> {
       send(1)
       send(2)
@@ -53,7 +56,7 @@ class WorkflowOperationsTest {
     assertEquals(Unit, workflow.result.await())
   }
 
-  @Test fun flatMapStateSuspending() = runBlocking {
+  @Test fun flatMapStateSuspending() = testScope {
     val source = workflow<Int, Nothing, Unit> {
       send(1)
       send(2)
@@ -71,7 +74,7 @@ class WorkflowOperationsTest {
     assertEquals(Unit, workflow.result.await())
   }
 
-  @Test fun mapEvent() = runBlocking {
+  @Test fun mapEvent() = testScope {
     val source = workflow<String, String, Unit> {
       send("initial")
       repeat(3) { send(receive()) }
@@ -97,7 +100,7 @@ class WorkflowOperationsTest {
     assertEquals(Unit, workflow.result.await())
   }
 
-  @Test fun mapResult() = runBlocking {
+  @Test fun mapResult() = testScope {
     val source = workflow<Nothing, Nothing, Int> { 1 }
     val workflow = source.mapResult { it.toString() }
 
@@ -105,7 +108,7 @@ class WorkflowOperationsTest {
     assertEquals("1", workflow.result.await())
   }
 
-  @Test fun mapResultSuspending() = runBlocking {
+  @Test fun mapResultSuspending() = testScope {
     val source = workflow<Nothing, Nothing, Int> { 1 }
     val workflow = source.mapResult { yield(); it.toString() }
 

@@ -10,6 +10,7 @@ import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.none
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import org.junit.Rule
 import kotlin.coroutines.ContinuationInterceptor
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.coroutineContext
@@ -20,16 +21,16 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class ReactorTest {
-  @Test fun initialState() = runBlocking(CoroutineName("test main")) {
+  @Rule @JvmField val testScope = CoroutineTestScope()
+
+  @Test fun initialState() = testScope {
     val workflow = reactor("initial", context = CoroutineName("reactor"), reactor = ::testReactor)
 
     assertEquals(actual = workflow.state.receive().state, expected = "initial")
     assertFalse(workflow.result.isCompleted)
-
-    workflow.abandon()
   }
 
-  @Test fun states() = runBlocking {
+  @Test fun states() = testScope {
     val workflow = reactor("initial", Unconfined, reactor = ::testReactor)
     val state = workflow.state.receive()
     assertEquals(actual = state.state, expected = "initial")
@@ -37,11 +38,9 @@ class ReactorTest {
     state.sendEvent("on(next)")
 
     assertEquals(actual = workflow.state.receive().state, expected = "next")
-
-    workflow.abandon()
   }
 
-  @Test fun finishes() = runBlocking {
+  @Test fun finishes() = testScope {
     val workflow = reactor("initial", Unconfined, reactor = ::testReactor)
 
     workflow.state.receive()
@@ -55,7 +54,7 @@ class ReactorTest {
     assertEquals(actual = workflow.result.await(), expected = "alldone")
   }
 
-  @Test fun whenReactorThrows() = runBlocking {
+  @Test fun whenReactorThrows() = testScope {
     val workflow = reactor("initial", Unconfined, reactor = ::testReactor)
 
     workflow.state.receive()
@@ -63,11 +62,9 @@ class ReactorTest {
 
     assertFailsWith<RuntimeException>("fail") { workflow.state.receive() }
     assertFailsWith<RuntimeException>("fail") { workflow.result.await() }
-
-    workflow.abandon()
   }
 
-  @Test fun reactInvokedFromScopeDispatcher() = runBlocking(CoroutineName("main")) {
+  @Test fun reactInvokedFromScopeDispatcher() = testScope {
     // This should be a TestCoroutineContext dispatcher, but that's JVM-only for some reason.
     val reactorDispatcher = Dispatchers.Default
     val workflow = withContext(reactorDispatcher) { reactor(Unit, reactor = dispatcherReactor) }
@@ -77,7 +74,7 @@ class ReactorTest {
     assertEquals(reactorDispatcher, actualDispatcher)
   }
 
-  @Test fun reactInvokedFromPassedDispatcher() = runBlocking(CoroutineName("main")) {
+  @Test fun reactInvokedFromPassedDispatcher() = testScope {
     val reactorDispatcher = Dispatchers.Default
     val workflow = reactor(Unit, reactorDispatcher, reactor = dispatcherReactor)
 
@@ -86,7 +83,7 @@ class ReactorTest {
     assertEquals(reactorDispatcher, actualDispatcher)
   }
 
-  @Test fun reactInvokedFromThisDispatcher() = runBlocking {
+  @Test fun reactInvokedFromThisDispatcher() = testScope {
     val workflow = reactor(Unit, reactor = dispatcherReactor)
 
     assertEquals(coroutineContext.dispatcher, workflow.result.await())
@@ -98,7 +95,7 @@ class ReactorTest {
    * What this incorrect behavior means that cancelling the workflow *won't* cancel the react
    * method, since it's actually running in the parent coroutine.
    */
-  @Test fun abandoningWorkflowCancelsReactor() = runBlocking(CoroutineName("test main")) {
+  @Test fun abandoningWorkflowCancelsReactor() = testScope {
     val workflow = reactor<Unit, Nothing, Unit>(Unit, CoroutineName("reactor")) { _, _ ->
       suspendCancellableCoroutine<Nothing> { /* Suspend forever */ }
     }

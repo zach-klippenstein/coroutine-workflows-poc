@@ -5,13 +5,16 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.none
+import org.junit.Rule
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class WorkflowProducerTest {
-  @Test fun happyPath() = runBlocking {
+  @Rule @JvmField val testScope = CoroutineTestScope()
+
+  @Test fun happyPath() = testScope {
     val workflow = simpleEchoWorkflow()
 
     // Workflow should be running.
@@ -27,7 +30,7 @@ class WorkflowProducerTest {
   }
 
   @Test fun appliesContext() {
-    runBlocking {
+    testScope {
       workflow<Nothing, Nothing, Unit>(CoroutineName("test coroutine")) {
         println("coroutineContext = $coroutineContext")
         assertTrue("test coroutine" in coroutineContext.toString())
@@ -35,7 +38,7 @@ class WorkflowProducerTest {
     }
   }
 
-  @Test fun throws() = runBlocking {
+  @Test fun throws() = testScope {
     val workflow = workflow<String, String, String> {
       throw RuntimeException("fail")
     }
@@ -44,7 +47,7 @@ class WorkflowProducerTest {
     assertFailsWith<RuntimeException>("fail") { workflow.result.await() }
   }
 
-  @Test fun cancellingStateNormallyCancelsChannels() = runBlocking {
+  @Test fun cancellingStateNormallyCancelsChannels() = testScope {
     val workflow = simpleEchoWorkflow()
 
     workflow.state.cancel(CancellationException("abandon"))
@@ -53,7 +56,7 @@ class WorkflowProducerTest {
     assertFailsWith<CancellationException>("abandon") { workflow.result.await() }
   }
 
-  @Test fun cancellingStateExceptionallyCancelsChannels() = runBlocking {
+  @Test fun cancellingStateExceptionallyCancelsChannels() = testScope {
     val workflow = simpleEchoWorkflow()
 
     workflow.state.cancel(RuntimeException("fail"))
@@ -62,7 +65,7 @@ class WorkflowProducerTest {
     assertFailsWith<RuntimeException>("fail") { workflow.result.await() }
   }
 
-  @Test fun cancellingResultNormallyCancelsChannels() = runBlocking {
+  @Test fun cancellingResultNormallyCancelsChannels() = testScope {
     val workflow = simpleEchoWorkflow()
 
     workflow.result.cancel(CancellationException("abandon"))
@@ -71,7 +74,7 @@ class WorkflowProducerTest {
     assertFailsWith<CancellationException>("abandon") { workflow.result.await() }
   }
 
-  @Test fun cancellingResultExceptionallyCancelsChannels() = runBlocking {
+  @Test fun cancellingResultExceptionallyCancelsChannels() = testScope {
     val workflow = simpleEchoWorkflow()
 
     workflow.result.cancel(RuntimeException("fail"))
@@ -80,7 +83,7 @@ class WorkflowProducerTest {
     assertFailsWith<RuntimeException>("fail") { workflow.result.await() }
   }
 
-  @Test fun abandonClosesChannels() = runBlocking {
+  @Test fun abandonClosesChannels() = testScope {
     val workflow = simpleEchoWorkflow()
 
     workflow.abandon()
@@ -93,7 +96,7 @@ class WorkflowProducerTest {
     }
   }
 
-  @Test fun channelToWorkflow() = runBlocking {
+  @Test fun channelToWorkflow() = testScope {
     val channel = Channel<String>()
     val workflow = channel.toWorkflow()
 
@@ -112,7 +115,7 @@ class WorkflowProducerTest {
     assertEquals(Unit, workflow.result.await())
   }
 
-  @Test fun channelToWorkflowCloseError() = runBlocking {
+  @Test fun channelToWorkflowCloseError() = testScope {
     val channel = Channel<String>()
     val workflow = channel.toWorkflow()
 
@@ -122,7 +125,7 @@ class WorkflowProducerTest {
     assertFailsWith<RuntimeException>("fail") { workflow.result.await() }
   }
 
-  @Test fun channelToWorkflowCancel() = runBlocking {
+  @Test fun channelToWorkflowCancel() = testScope {
     val channel = Channel<String>()
     val workflow = channel.toWorkflow()
 
@@ -132,7 +135,7 @@ class WorkflowProducerTest {
     assertEquals(Unit, workflow.result.await())
   }
 
-  @Test fun deferredToWorkflow() = runBlocking {
+  @Test fun deferredToWorkflow() = testScope {
     val deferred = CompletableDeferred<String>()
     val workflow = deferred.toWorkflow()
 
@@ -145,7 +148,7 @@ class WorkflowProducerTest {
     assertEquals("foo", workflow.result.await())
   }
 
-  @Test fun deferredToWorkflowCompleteError() = runBlocking {
+  @Test fun deferredToWorkflowCompleteError() = testScope {
     val deferred = CompletableDeferred<String>()
     val workflow = deferred.toWorkflow()
 
@@ -155,7 +158,7 @@ class WorkflowProducerTest {
     assertFailsWith<RuntimeException>("fail") { workflow.result.await() }
   }
 
-  @Test fun deferredToWorkflowCancel() = runBlocking {
+  @Test fun deferredToWorkflowCancel() = testScope {
     val deferred = CompletableDeferred<String>()
     val workflow = deferred.toWorkflow()
 
