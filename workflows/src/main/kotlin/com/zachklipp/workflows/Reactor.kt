@@ -42,7 +42,7 @@ typealias Reactor<State, Event, Result> =
 fun <S : Any, E : Any, R : Any> CoroutineScope.reactor(
   initialState: S,
   context: CoroutineContext = EmptyCoroutineContext,
-  reactor: suspend (S, ReceiveChannel<E>) -> Reaction<S, R>
+  reactor: Reactor<S, E, R>
 ) = reactor(EnterState(initialState), context, reactor)
 
 /**
