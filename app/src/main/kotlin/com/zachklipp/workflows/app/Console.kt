@@ -67,10 +67,11 @@ private class StreamConsole(
         }
       }
 
-      return@coroutineScope async(Dispatchers.IO, onCompletion = { writer.cancel() }) {
+      return@coroutineScope async(Dispatchers.IO) {
         pipeIn.bufferedReader()
             .readLine()
-      }.await()
+      }.apply { invokeOnCompletion { cause -> writer.cancel(cause) } }
+          .await()
     }
   }
 }

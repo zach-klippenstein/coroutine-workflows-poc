@@ -2,7 +2,6 @@ package com.zachklipp.workflows
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CompletionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
@@ -38,28 +37,16 @@ interface WorkflowScope<S : Any, E : Any> : CoroutineScope,
  * @param context additional to [CoroutineScope.coroutineContext] context of the
  * coroutine.
  * @param start coroutine start option. The default value is [CoroutineStart.DEFAULT].
- * @param onCompletion optional completion handler for the coroutine (see [Job.invokeOnCompletion]).
  * @param block the coroutine code.
  */
 fun <S : Any, E : Any, R : Any> CoroutineScope.workflow(
   context: CoroutineContext = EmptyCoroutineContext,
   start: CoroutineStart = CoroutineStart.DEFAULT,
-  onCompletion: CompletionHandler? = null,
   block: suspend WorkflowScope<S, E>.() -> R
 ): Workflow<S, E, R> {
   val stateChannel = Channel<S>()
   val eventChannel = Channel<E>()
-  val result = async(
-      context = context,
-      start = start,
-      onCompletion = { cause ->
-        // Cancelling the result also cancels the channel (and vice versa).
-        // If the workflow finishes normally the channel will be closed normally first, so this will
-        // be a no-op.
-        stateChannel.cancel(cause)
-        eventChannel.cancel(cause)
-        onCompletion?.invoke(cause)
-      }) {
+  val result = async(context, start) {
     val result = object : WorkflowScope<S, E>,
         CoroutineScope by this,
         SendChannel<S> by stateChannel,
@@ -67,6 +54,13 @@ fun <S : Any, E : Any, R : Any> CoroutineScope.workflow(
     stateChannel.close()
     eventChannel.close()
     return@async result
+  }
+  result.invokeOnCompletion { cause ->
+    // Cancelling the result also cancels the channel (and vice versa).
+    // If the workflow finishes normally the channel will be closed normally first, so this will
+    // be a no-op.
+    stateChannel.cancel(cause)
+    eventChannel.cancel(cause)
   }
   stateChannel.invokeOnClose { cause -> if (cause is CancellationException) result.cancel(cause) }
   eventChannel.invokeOnClose { cause -> if (cause is CancellationException) result.cancel(cause) }
